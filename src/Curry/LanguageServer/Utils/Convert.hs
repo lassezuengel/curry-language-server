@@ -232,7 +232,7 @@ instance HasDocumentSymbols (CS.Decl a) where
                   symKind = if patArity pat > 0 then J.SkFunction
                                                 else J.SkConstant
                   childs = documentSymbols rhs
-        CS.ClassDecl _ _ _ ident _ decls -> [makeDocumentSymbol name symKind range $ Just childs]
+        CS.ClassDecl _ _ _ _ ident _ decls -> [makeDocumentSymbol name symKind range $ Just childs]
             where name = ppToText ident
                   symKind = J.SkInterface
                   childs = documentSymbols =<< decls
@@ -251,7 +251,7 @@ instance HasDocumentSymbols (CS.Decl a) where
                   CS.FunctionPattern _ _ _ ps -> length ps
                   _                           -> 0
               eqsArity :: [CS.Equation a] -> Int
-              eqsArity eqs = maybe 1 (\(CS.Equation _ lhs _) -> lhsArity lhs) $ listToMaybe eqs
+              eqsArity eqs = maybe 1 (\(CS.Equation _ _ lhs _) -> lhsArity lhs) $ listToMaybe eqs
               range = currySpanInfo2Range $ CSPI.getSpanInfo decl
 
 instance HasDocumentSymbols (CS.Var a) where
@@ -266,7 +266,7 @@ instance HasDocumentSymbols CS.ConstrDecl where
         where range = currySpanInfo2Range $ CSPI.getSpanInfo decl
 
 instance HasDocumentSymbols (CS.Equation a) where
-    documentSymbols (CS.Equation _ _ rhs) = documentSymbols rhs
+    documentSymbols (CS.Equation _ _ _ rhs) = documentSymbols rhs
 
 instance HasDocumentSymbols (CS.Rhs a) where
     documentSymbols rhs = case rhs of
