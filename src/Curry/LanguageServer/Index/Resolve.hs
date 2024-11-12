@@ -14,7 +14,7 @@ import qualified Curry.LanguageServer.Index.Symbol as I
 import Curry.LanguageServer.Utils.Convert (currySpanInfo2Range)
 import Curry.LanguageServer.Utils.Sema (ModuleAST)
 import Curry.LanguageServer.Utils.Lookup (findQualIdentAtPos, findModuleIdentAtPos)
-import qualified Language.LSP.Types as J
+import qualified Language.LSP.Protocol.Types as J
 
 -- | Resolves the identifier at the given position.
 resolveAtPos :: I.IndexStore -> ModuleAST -> J.Position -> Maybe ([I.Symbol], J.Range)
@@ -51,5 +51,5 @@ resolveModuleIdent store mid = tryFilterFromCurrySource $ I.storedModuleSymbolsB
 
 -- | Tries filtering symbols from a Curry source file.
 tryFilterFromCurrySource :: [I.Symbol] -> [I.Symbol]
-tryFilterFromCurrySource symbols | any I.sIsFromCurrySource symbols = filter I.sIsFromCurrySource symbols
-                                 | otherwise                        = symbols
+tryFilterFromCurrySource symbols | any I.symbolIsFromCurrySource symbols = filter I.symbolIsFromCurrySource symbols
+                                 | otherwise                             = symbols

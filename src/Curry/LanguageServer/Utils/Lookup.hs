@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, ViewPatterns #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, NoFieldSelectors, OverloadedRecordDot, ViewPatterns #-}
 -- | Position lookup in the AST.
 module Curry.LanguageServer.Utils.Lookup
     ( findQualIdentAtPos
@@ -14,7 +14,8 @@ import qualified Curry.Base.SpanInfo as CSPI
 import qualified Curry.Syntax as CS
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Monad.State (State, when, execState, gets, modify)
+import Control.Monad (when)
+import Control.Monad.State (State, execState, gets, modify)
 import Curry.LanguageServer.Utils.Convert (currySpanInfo2Range)
 import Curry.LanguageServer.Utils.General (rangeElem, joinFst, (<.$>))
 import Curry.LanguageServer.Utils.Syntax
@@ -28,7 +29,7 @@ import Curry.LanguageServer.Utils.Syntax
 import Curry.LanguageServer.Utils.Sema
     ( HasTypedSpanInfos(typedSpanInfos), TypedSpanInfo )
 import qualified Data.Map as M
-import qualified Language.LSP.Types as J
+import qualified Language.LSP.Protocol.Types as J
 
 -- | A collectScope of bound identifiers.
 type Scope a = M.Map CI.Ident (Maybe a)
@@ -50,10 +51,10 @@ findTypeAtPos ast pos = elementAt pos $ typedSpanInfos ast
 
 -- | Finds all accessible identifiers at the given position, using the innermost shadowed one.
 findScopeAtPos :: CS.Module a -> J.Position -> Scope a
-findScopeAtPos ast pos = sstMatchingEnv $ execState (collectScope ast) $ ScopeState
-    { sstCurrentEnv = [M.empty]
-    , sstMatchingEnv = M.empty
-    , sstPosition = pos
+findScopeAtPos ast pos = (.matchingEnv) $ execState (collectScope ast) $ ScopeState
+    { currentEnv = [M.empty]
+    , matchingEnv = M.empty
+    , position = pos
     }
 
 withSpanInfo :: CSPI.HasSpanInfo a => a -> (a, CSPI.SpanInfo)
@@ -73,31 +74,31 @@ flattenScopes = foldr M.union M.empty
 
 -- | Stores nested scopes and a cursor position. The head of the list is always the innermost collectScope.
 data ScopeState a = ScopeState
-    { sstCurrentEnv :: [Scope a]
-    , sstMatchingEnv :: Scope a
-    , sstPosition :: J.Position
+    { currentEnv :: [Scope a]
+    , matchingEnv :: Scope a
+    , position :: J.Position
     }
 
 type ScopeM a = State (ScopeState a)
 
 beginScope :: ScopeM a ()
-beginScope = modify $ \s -> s { sstCurrentEnv = M.empty : sstCurrentEnv s }
+beginScope = modify $ \s -> s { currentEnv = M.empty : s.currentEnv }
 
 endScope :: ScopeM a ()
-endScope = modify $ \s -> s { sstCurrentEnv = let e = tail $ sstCurrentEnv s in if null e then error "Cannot end top-level scope!" else e }
+endScope = modify $ \s -> s { currentEnv = let e = tail s.currentEnv in if null e then error "Cannot end top-level scope!" else e }
 
 withScope :: ScopeM a () -> ScopeM a ()
 withScope x = beginScope >> x >> endScope
 
 bind :: CI.Ident -> Maybe a -> ScopeM a ()
 bind i t = do
-    modify $ \s -> s { sstCurrentEnv = bindInScopes i t $ sstCurrentEnv s }
+    modify $ \s -> s { currentEnv = bindInScopes i t s.currentEnv }
 
 updateEnvs :: CSPI.HasSpanInfo e => e -> ScopeM a ()
 updateEnvs (CSPI.getSpanInfo -> spi) = do
-    pos <- gets sstPosition
+    pos <- gets (.position)
     when (spi `containsPos` pos) $
-        modify $ \s -> s { sstMatchingEnv = M.union (flattenScopes $ sstCurrentEnv s) $ sstMatchingEnv s }
+        modify $ \s -> s { matchingEnv = M.union (flattenScopes s.currentEnv) s.matchingEnv }
 
 class CollectScope e a where
     collectScope :: e -> ScopeM a ()

@@ -7,7 +7,7 @@
 # Resolver to choose a 'specific' stackage snapshot or a compiler version.
 # A snapshot resolver dictates the compiler version and the set of packages
 # to be used for project dependencies.
-resolver: lts-20.22
+resolver: lts-22.30
 
 # User packages to be built.
 packages:
@@ -16,11 +16,11 @@ packages:
 # These entries can reference officially published versions as well as
 # forks / in-progress versions pinned to a git hash. For example:
 extra-deps:
-  - set-extra-1.4.1@sha256:c58aa620704f609f289953e7c1f9c1653fd1498f0984b0f03a3f8f38f7ed5a84
-  - lsp-1.6.0.0
-  - co-log-core-0.3.2.0@sha256:9b2699adecee2f072b6c713089e675b592ef23f00a2ff3740bdaf4d87de8d456
+  - lsp-2.7.0.0
+  - lsp-types-2.3.0.0
+  - set-extra-1.4.2
   - git: https://git.ps.informatik.uni-kiel.de/curry/curry-frontend.git
-    commit: bc903fc0ee9d1f57327044a36d180eafc42489c2
+    commit: d2afbcbc50d1d9ff2ff889969da589855883026d
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

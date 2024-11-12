@@ -28,17 +28,18 @@ import Curry.LanguageServer.Utils.Uri (normalizeUriWithPath)
 import Curry.LanguageServer.Utils.Logging (infoM, debugM)
 import Data.Bifunctor (bimap)
 import Data.Foldable (find)
-import Data.Maybe (fromMaybe, listToMaybe, maybeToList)
+import Data.Maybe (listToMaybe, maybeToList)
 import qualified Data.List.NonEmpty as N
 import qualified Data.Text as T
 import qualified Language.LSP.Server as S
-import qualified Language.LSP.Types as J
-import qualified Language.LSP.Types.Lens as J
+import qualified Language.LSP.Protocol.Types as J
+import qualified Language.LSP.Protocol.Lens as J
 import qualified Language.LSP.VFS as VFS
 import Language.LSP.Server (MonadLsp)
+import qualified Language.LSP.Protocol.Message as J
 
 signatureHelpHandler :: S.Handlers LSM
-signatureHelpHandler = S.requestHandler J.STextDocumentSignatureHelp $ \req responder -> do
+signatureHelpHandler = S.requestHandler J.SMethod_TextDocumentSignatureHelp $ \req responder -> do
     debugM "Processing signature help request"
     let J.SignatureHelpParams doc pos _ _ = req ^. J.params
         uri = doc ^. J.uri
@@ -48,8 +49,7 @@ signatureHelpHandler = S.requestHandler J.STextDocumentSignatureHelp $ \req resp
         entry <- I.getModule normUri
         vfile <- MaybeT $ S.getVirtualFile normUri
         MaybeT $ fetchSignatureHelp store entry vfile pos
-    responder $ Right $ fromMaybe emptyHelp sigHelp
-    where emptyHelp = J.SignatureHelp (J.List []) Nothing Nothing
+    responder $ Right $ maybe (J.InR J.Null) J.InL sigHelp
 
 fetchSignatureHelp :: (MonadIO m, MonadLsp CFG.Config m) => I.IndexStore -> I.ModuleStoreEntry -> VFS.VirtualFile -> J.Position -> m (Maybe J.SignatureHelp)
 fetchSignatureHelp store entry vfile pos@(J.Position l c) = runMaybeT $ do
@@ -60,21 +60,21 @@ fetchSignatureHelp store entry vfile pos@(J.Position l c) = runMaybeT $ do
     (sym, spi, args) <- liftMaybe
         $  findExpressionApplication store ast pos'
        <|> findTypeApplication       store ast pos'
-    lift $ infoM $ "Found symbol " <> I.sQualIdent sym
+    lift $ infoM $ "Found symbol " <> sym.qualIdent
     symEnd <- liftMaybe [end | J.Range _ end <- currySpanInfo2Range spi]
     let defaultParam | pos >= symEnd = fromIntegral $ length args
                      | otherwise     = 0
         activeParam = maybe defaultParam fst $ find (elementContains pos . snd) (zip [0..] args)
         activeSig = 0
-        labelStart = I.sQualIdent sym <> " :: "
+        labelStart = sym.qualIdent <> " :: "
         paramSep = " -> "
-        paramLabels = I.sPrintedArgumentTypes sym
+        paramLabels = sym.printedArgumentTypes
         paramOffsets = reverse $ snd $ foldl (\(n, offs) lbl -> let n' = n + T.length lbl in (n' + T.length paramSep, (n, n') : offs)) (T.length labelStart, []) paramLabels
-        params = flip J.ParameterInformation Nothing . uncurry J.ParameterLabelOffset . bimap fromIntegral fromIntegral <$> paramOffsets
-        label = labelStart <> T.intercalate paramSep (paramLabels ++ maybeToList (I.sPrintedResultType sym))
-        sig = J.SignatureInformation label Nothing (Just $ J.List params) (Just activeParam)
+        params = flip J.ParameterInformation Nothing . J.InR . bimap fromIntegral fromIntegral <$> paramOffsets
+        label = labelStart <> T.intercalate paramSep (paramLabels ++ maybeToList sym.printedResultType)
+        sig = J.SignatureInformation label Nothing (Just params) (Just (J.InL activeParam))
         sigs = [sig]
-    return $ J.SignatureHelp (J.List sigs) (Just activeSig) (Just activeParam)
+    return $ J.SignatureHelp sigs (Just activeSig) (Just (J.InL activeParam))
 
 findExpressionApplication :: I.IndexStore -> ModuleAST -> J.Position -> Maybe (I.Symbol, CSPI.SpanInfo, [CSPI.SpanInfo])
 findExpressionApplication store ast pos = lastSafe $ do
